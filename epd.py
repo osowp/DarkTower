@@ -2,6 +2,7 @@ import serial
 import RPi.GPIO as GPIO
 from time import sleep
 
+#Errors with serial port is problem with PI configuration, maybe conflict with bluetooth
 ser = serial.Serial('/dev/serial0', 115200, timeout=1)
 
 #e-Ink DIO lines
@@ -52,22 +53,23 @@ CMD_LOAD_FONT           =           0x0E                                        
 CMD_LOAD_PIC            =           0x0F                                                     #load picture
 
 CMD_SET_COLOR           =           0x10                                                     #set color
+CMD_GET_COLOR           =           0x11                                                     #set color
 CMD_SET_EN_FONT         =           0x1E                                                     #set english font
 #CMD_SET_CH_FONT         =           0x1F                                                     #set chinese font
 
-#CMD_DRAW_PIXEL          =           0x20                                                     #set pixel
+CMD_DRAW_PIXEL          =           0x20                                                     #set pixel
 CMD_DRAW_LINE           =           0x22                                                     #draw line
 CMD_FILL_RECT           =           0x24                                                     #fill rectangle
 CMD_DRAW_RECT           =           0x25                                                     #draw Rectangle
 CMD_DRAW_CIRCLE         =           0x26                                                     #draw circle
 CMD_FILL_CIRCLE         =           0x27                                                     #fill circle
-#CMD_DRAW_TRIANGLE       =           0x28                                                     #draw triangle
-#CMD_FILL_TRIANGLE       =           0x29                                                     #fill triangle
-#CMD_CLEAR               =           0x2E                                                     #clear screen use back color
+CMD_DRAW_TRIANGLE       =           0x28                                                     #draw triangle
+CMD_FILL_TRIANGLE       =           0x29                                                     #fill triangle
+CMD_CLEAR               =           0x2E                                                     #clear screen use back color
 
-#CMD_DRAW_STRING         =           0x30                                                     #draw string
+CMD_DRAW_STRING         =           0x30                                                     #draw string
 
-#CMD_DRAW_BITMAP         =           0x70 
+CMD_DRAW_BITMAP         =           0x70 
 ##CMD_INPUT_STREAM       =           0x40
 
 
@@ -104,17 +106,53 @@ def _verify(data, nlen):
 	
     return result
 
-def _fixed_cmd(_cmd):
-    _cmd_template  = bytearray([FRAME_B, 0x00, 0x09, 0xFF, FRAME_E0, FRAME_E1, FRAME_E2, FRAME_E3, 0xFF]) 
+def _fixed_cmd0(_cmd):
+    _cmd_buff  = bytearray([FRAME_B, 0x00, 0x09, _cmd, FRAME_E0, FRAME_E1, FRAME_E2, FRAME_E3, 0xFF]) 
 
-    _cmd_template[3] = _cmd
-    _cmd_template[8] = _verify(_cmd_template, 8)
-    ser.write(_cmd_template)
+    _cmd_buff[8] = _verify(_cmd_buff, 8)
+    ser.write(_cmd_buff)
     retVal = ser.readline()
+    print(_cmd, ' - ',retVal)
     return retVal
-#    print(ser.readline())
+
+def _fixed_cmd1(_cmd, _param):
+    _cmd_buff  = bytearray([FRAME_B, 0x00, 0x0A, _cmd, _param, FRAME_E0, FRAME_E1, FRAME_E2, FRAME_E3, 0xFF]) 
+
+    _cmd_buff[9] = _verify(_cmd_buff, 9)
+    ser.write(_cmd_buff)
+    retVal = ser.readline()
+    print(_cmd, ' - ', _param,' - ',retVal)
+    return retVal
 
 
+def _fixed_cmd4(_cmd, _param1, _param2, _param3, _param4):
+    _cmd_buff = [0]*17
+    _cmd_buff[0] = FRAME_B
+    _cmd_buff[1] = 0x00
+    _cmd_buff[2] = 0x11	
+	
+    _cmd_buff[3] = _cmd
+	
+    _cmd_buff[4] = (_param1 >> 8) & 0xFF;
+    _cmd_buff[5] = _param1 & 0xFF;
+    _cmd_buff[6] = (_param2 >> 8) & 0xFF;
+    _cmd_buff[7] = _param2 & 0xFF;
+    _cmd_buff[8] = (_param3 >> 8) & 0xFF;
+    _cmd_buff[9] = _param3 & 0xFF;
+    _cmd_buff[10] = (_param4 >> 8) & 0xFF;
+    _cmd_buff[11] = _param4 & 0xFF;	
+	
+    _cmd_buff[12] = FRAME_E0;
+    _cmd_buff[13] = FRAME_E1;
+    _cmd_buff[14] = FRAME_E2;
+    _cmd_buff[15] = FRAME_E3;	
+    _cmd_buff[16] = _verify(_cmd_buff, 16);
+	
+    ser.write(_cmd_buff)
+#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
+    retVal = ser.readline()
+    print(_cmd, ' - ', _param1, ', ', _param2, _param3, ', ', _param4,' - ',retVal)
+    return retVal
 
 #*******************************************************************************
 #* Function Name  : void epd_wakeup(void)
@@ -143,7 +181,7 @@ def epd_wakeup():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_enter_sleep():
-    _fixed_cmd(CMD_STOPMODE)
+    _fixed_cmd0(CMD_STOPMODE)
 
 
 #*******************************************************************************
@@ -173,7 +211,7 @@ def epd_reset():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_handshake():
-    _fixed_cmd(CMD_HANDSHAKE)
+    _fixed_cmd0(CMD_HANDSHAKE)
   
 #*******************************************************************************
 #* Function Name  : void epd_read_baud(void)
@@ -184,7 +222,7 @@ def epd_handshake():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_read_baud():
-    retVal = _fixed_cmd(CMD_READ_BAUD)
+    retVal = _fixed_cmd0(CMD_READ_BAUD)
     print(retVal)
     return retVal
 
@@ -197,7 +235,7 @@ def epd_read_baud():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_read_memory():
-    retVal = _fixed_cmd(CMD_READ_MEMORYMODE)
+    retVal = _fixed_cmd0(CMD_READ_MEMORYMODE)
     print(retVal)
     return retVal
 
@@ -210,26 +248,7 @@ def epd_read_memory():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_set_memory(mode):
-    _cmd_buff = [0]*10
-
-    _cmd_buff[0] = FRAME_B
-	
-    _cmd_buff[1] = 0x00
-    _cmd_buff[2] = 0x0A	
-	
-    _cmd_buff[3] = CMD_MEMORYMODE
-	
-    _cmd_buff[4] = mode
-	
-    _cmd_buff[5] = FRAME_E0
-    _cmd_buff[6] = FRAME_E1
-    _cmd_buff[7] = FRAME_E2
-    _cmd_buff[8] = FRAME_E3	
-    _cmd_buff[9] = _verify(_cmd_buff, 9)
-	
-    ser.write(_cmd_buff)
-#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+    _fixed_cmd1(CMD_MEMORYMODE, mode)
 
 #*******************************************************************************
 #* Function Name  : void epd_load_font(void)
@@ -240,7 +259,7 @@ def epd_set_memory(mode):
 #* Attention		   : None
 #*******************************************************************************/
 def epd_load_font():
-    _fixed_cmd(CMD_LOAD_FONT)
+    _fixed_cmd0(CMD_LOAD_FONT)
 
 #*******************************************************************************
 #* Function Name  : void epd_load_pic(void)
@@ -251,8 +270,19 @@ def epd_load_font():
 #* Attention	  : None
 #*******************************************************************************/
 def epd_load_pic():
-    _fixed_cmd(CMD_LOAD_PIC)
+    _fixed_cmd0(CMD_LOAD_PIC)
 
+
+#*******************************************************************************
+#* Function Name  : void epd_clear(void)
+#* Description    : 
+#* Input          : 
+#* Output         : None
+#* Return         : 
+#* Attention		   : None
+#*******************************************************************************/
+def epd_clear():
+    _fixed_cmd0(CMD_CLEAR)
 
 #*******************************************************************************
 #* Function Name  : void epd_update(void)
@@ -263,7 +293,7 @@ def epd_load_pic():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_update():
-    _fixed_cmd(CMD_UPDATE)
+    _fixed_cmd0(CMD_UPDATE)
 
 #*******************************************************************************
 #* Function Name  : void epd_read_screen_rotation(void)
@@ -275,7 +305,7 @@ def epd_update():
 #* Attention	  : None
 #*******************************************************************************/
 def epd_read_screen_rotation():
-    retVal = _fixed_cmd(CMD_READ_SCREEN_ROT)
+    retVal = _fixed_cmd0(CMD_READ_SCREEN_ROT)
     print(retVal)
     return retVal
 
@@ -290,26 +320,8 @@ def epd_read_screen_rotation():
 #* Attention		   : None
 #*******************************************************************************/
 def epd_screen_rotation(mode):
-    _cmd_buff = [0]*10
+    _fixed_cmd1(CMD_SCREEN_ROTATION, mode)
 
-    _cmd_buff[0] = FRAME_B
-	
-    _cmd_buff[1] = 0x00
-    _cmd_buff[2] = 0x0A	
-	
-    _cmd_buff[3] = CMD_SCREEN_ROTATION;
-	
-    _cmd_buff[4] = mode
-	
-    _cmd_buff[5] = FRAME_E0
-    _cmd_buff[6] = FRAME_E1
-    _cmd_buff[7] = FRAME_E2
-    _cmd_buff[8] = FRAME_E3	
-    _cmd_buff[9] = _verify(_cmd_buff, 9)
-	
-    ser.write(_cmd_buff)
-#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
         
 #/*******************************************************************************
 #* Function Name  : void epd_set_color(unsigned char color, unsigned char bkcolor)
@@ -320,12 +332,11 @@ def epd_screen_rotation(mode):
 #* Attention		   : None
 #*******************************************************************************/
 def epd_set_color(color, bkcolor):
-
     _cmd_buff = [0]*11
     _cmd_buff[0] = FRAME_B
 	
     _cmd_buff[1] = 0x00
-    _cmd_buff[2] = 0x0B
+    _cmd_buff[2] = 0x0B  #length
 	
     _cmd_buff[3] = CMD_SET_COLOR
 	
@@ -343,6 +354,18 @@ def epd_set_color(color, bkcolor):
     print(ser.readline())
 
 #*******************************************************************************
+#* Function Name  : void epd_get_color(unsigned char font)
+#* Description    : 
+#* Input          : 
+#* Output         : None
+#* Return         : 
+#* Attention	  : None
+#*******************************************************************************/
+def epd_get_color( ):
+    _fixed_cmd0(CMD_GET_COLOR)
+
+
+#*******************************************************************************
 #* Function Name  : void epd_set_en_font(unsigned char font)
 #* Description    : 
 #* Input          : ASCII32, ASCII48, ASCII64
@@ -351,24 +374,41 @@ def epd_set_color(color, bkcolor):
 #* Attention		   : None
 #*******************************************************************************/
 def epd_set_en_font( font):
+    _fixed_cmd1(CMD_SET_EN_FONT, font)
+
+
+#*******************************************************************************
+#* Function Name  : void epd_draw_pixel(int x0, int y0)
+#* Description    : 
+#* Input          : 
+#* Output         : None
+#* Return         : 
+#* Attention		   : None
+#*******************************************************************************/
+def epd_draw_pixel( x0,  y0):
+
+    _cmd_buff = [0]*13
     _cmd_buff[0] = FRAME_B
-	
     _cmd_buff[1] = 0x00
-    _cmd_buff[2] = 0x0A	
+    _cmd_buff[2] = 0x0D	#length
 	
-    _cmd_buff[3] = CMD_SET_EN_FONT
+    _cmd_buff[3] = CMD_DRAW_PIXEL
 	
-    _cmd_buff[4] = font
+    _cmd_buff[4] = (x0 >> 8) & 0xFF;
+    _cmd_buff[5] = x0 & 0xFF;
+    _cmd_buff[6] = (y0 >> 8) & 0xFF;
+    _cmd_buff[7] = y0 & 0xFF;
 	
-    _cmd_buff[5] = FRAME_E0
-    _cmd_buff[6] = FRAME_E1
-    _cmd_buff[7] = FRAME_E2
-    _cmd_buff[8] = FRAME_E3
-    _cmd_buff[9] = _verify(_cmd_buff, 9)
+    _cmd_buff[8] = FRAME_E0;
+    _cmd_buff[9] = FRAME_E1;
+    _cmd_buff[10] = FRAME_E2;
+    _cmd_buff[11] = FRAME_E3;	
+    _cmd_buff[12] = _verify(_cmd_buff, 12);
 	
     ser.write(_cmd_buff)
 #    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
     print(ser.readline())
+
 
 #*******************************************************************************
 #* Function Name  : void epd_draw_line(int x0, int y0, int x1, int y1)
@@ -379,32 +419,7 @@ def epd_set_en_font( font):
 #* Attention		   : None
 #*******************************************************************************/
 def epd_draw_line( x0,  y0,  x1,  y1):
-    _cmd_buff = [0]*17
-    _cmd_buff[0] = FRAME_B;
-	
-    _cmd_buff[1] = 0x00;
-    _cmd_buff[2] = 0x11;	
-	
-    _cmd_buff[3] = CMD_DRAW_LINE;	
-	
-    _cmd_buff[4] = (x0 >> 8) & 0xFF;
-    _cmd_buff[5] = x0 & 0xFF;
-    _cmd_buff[6] = (y0 >> 8) & 0xFF;
-    _cmd_buff[7] = y0 & 0xFF;
-    _cmd_buff[8] = (x1 >> 8) & 0xFF;
-    _cmd_buff[9] = x1 & 0xFF;
-    _cmd_buff[10] = (y1 >> 8) & 0xFF;
-    _cmd_buff[11] = y1 & 0xFF;	
-	
-    _cmd_buff[12] = FRAME_E0;
-    _cmd_buff[13] = FRAME_E1;
-    _cmd_buff[14] = FRAME_E2;
-    _cmd_buff[15] = FRAME_E3;	
-    _cmd_buff[16] = _verify(_cmd_buff, 16);
-	
-    ser.write(_cmd_buff)
-#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+    _fixed_cmd4(CMD_DRAW_LINE,x0,  y0,  x1,  y1)
 
 
 #*******************************************************************************
@@ -416,35 +431,11 @@ def epd_draw_line( x0,  y0,  x1,  y1):
 #* Attention		   : None
 #*******************************************************************************/
 def epd_draw_rect( x0,  y0,  x1,  y1,  bFill):
-
-    _cmd_buff = [0]*17
-    _cmd_buff[0] = FRAME_B
-    _cmd_buff[1] = 0x00
-    _cmd_buff[2] = 0x11	
 	
     if(bFill ==False ):
-        _cmd_buff[3] = CMD_DRAW_RECT
+        _fixed_cmd4(CMD_DRAW_RECT, x0,  y0,  x1,  y1)
     else:
-        _cmd_buff[3] = CMD_FILL_RECT 
-	
-    _cmd_buff[4] = (x0 >> 8) & 0xFF;
-    _cmd_buff[5] = x0 & 0xFF;
-    _cmd_buff[6] = (y0 >> 8) & 0xFF;
-    _cmd_buff[7] = y0 & 0xFF;
-    _cmd_buff[8] = (x1 >> 8) & 0xFF;
-    _cmd_buff[9] = x1 & 0xFF;
-    _cmd_buff[10] = (y1 >> 8) & 0xFF;
-    _cmd_buff[11] = y1 & 0xFF;	
-	
-    _cmd_buff[12] = FRAME_E0;
-    _cmd_buff[13] = FRAME_E1;
-    _cmd_buff[14] = FRAME_E2;
-    _cmd_buff[15] = FRAME_E3;	
-    _cmd_buff[16] = _verify(_cmd_buff, 16);
-	
-    ser.write(_cmd_buff)
-#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+        _fixed_cmd4(CMD_FILL_RECT, x0,  y0,  x1,  y1)
 
 #*******************************************************************************
 #* Function Name  : epd_clear_rect(int x0, int y0, int x1, int y1)
@@ -501,6 +492,102 @@ def epd_draw_circle( x0,  y0,  r,  bFill):
     ser.write(_cmd_buff)
     print(ser.readline())
 
+def epd_draw_triangle(x0, y0, x1, y1, x2, y2, bFill):
+    _cmd_buff = [0]*21
+    _cmd_buff[0] = FRAME_B
+    _cmd_buff[1] = 0x00
+    _cmd_buff[2] = 0x15	
+	
+    if(bFill == 0):
+        _cmd_buff[3] = CMD_DRAW_TRIANGLE;	
+    else:
+        _cmd_buff[3] = CMD_FILL_TRIANGLE; 
+	
+    _cmd_buff[4] = (x0 >> 8) & 0xFF;
+    _cmd_buff[5] = x0 & 0xFF;
+    _cmd_buff[6] = (y0 >> 8) & 0xFF;
+    _cmd_buff[7] = y0 & 0xFF;
+    _cmd_buff[8] = (x1 >> 8) & 0xFF;
+    _cmd_buff[9] = x1 & 0xFF;
+    _cmd_buff[10] = (y1 >> 8) & 0xFF;
+    _cmd_buff[11] = y1 & 0xFF;
+    _cmd_buff[12] = (x2 >> 8) & 0xFF;
+    _cmd_buff[13] = x2 & 0xFF;
+    _cmd_buff[14] = (y2 >> 8) & 0xFF;
+    _cmd_buff[15] = y2 & 0xFF;
+	
+    _cmd_buff[16] = FRAME_E0;
+    _cmd_buff[17] = FRAME_E1;
+    _cmd_buff[18] = FRAME_E2;
+    _cmd_buff[19] = FRAME_E3;	
+    _cmd_buff[20] = _verify(_cmd_buff, 20);
+	
+    ser.write(_cmd_buff)
+#    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
+    print(ser.readline())
+
+
+def _var_cmd(_cmd, STR,  x0,  y0):
+    dispStr = bytearray(STR, 'utf8')
+
+    string_size = len(dispStr)
+#	unsigned char * ptr = (unsigned char *)p;
+#	string_size = strlen((const char *)ptr);
+    buff_size = 14 + string_size;
+
+    _cmd_buff = bytearray(buff_size)
+    _cmd_buff[0] = FRAME_B;
+	
+    _cmd_buff[1] = (buff_size >> 8) & 0xFF;
+    _cmd_buff[2] = buff_size & 0xFF;
+	
+    _cmd_buff[3] = _cmd;
+	
+    _cmd_buff[4] = (x0 >> 8) & 0xFF;
+    _cmd_buff[5] = x0 & 0xFF;
+    _cmd_buff[6] = (y0 >> 8) & 0xFF;
+    _cmd_buff[7] = y0 & 0xFF;
+
+    _cmd_buff[8:8+string_size]	= dispStr
+#	strcpy((char *)(&_cmd_buff[8]), (const char *)ptr);
+	
+#	string_size -= 5;
+	
+    _cmd_buff[buff_size - 5] = FRAME_E0;
+    _cmd_buff[buff_size - 4] = FRAME_E1;
+    _cmd_buff[buff_size - 3] = FRAME_E2;
+    _cmd_buff[buff_size - 2] = FRAME_E3;
+    _cmd_buff[buff_size - 1] = _verify(_cmd_buff, buff_size -1);
+	
+    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
+    ser.write(_cmd_buff)
+    print(ser.readline())
+
+#*******************************************************************************
+#* Function Name  : void epd_disp_string(const void * p, int x0, int y0)
+#* Description    : 
+#* Input          : 
+#* Output         : None
+#* Return         : 
+#* Attention		   : None
+#*******************************************************************************/
+
+def epd_disp_string( STR,  x0,  y0):
+    #error:250 file doesn't exist
+    _var_cmd(CMD_DRAW_STRING, STR,  x0,  y0)
+
+#*******************************************************************************
+#* Function Name  : void epd_disp_bitmap(const void * p, int x0, int y0)
+#* Description    : 
+#* Input          : 
+#* Output         : None
+#* Return         : 
+#* Attention		   : None
+#*******************************************************************************/
+
+def epd_disp_bitmap( FileName,  x0,  y0):
+    _var_cmd(CMD_DRAW_BITMAP, FileName,  x0,  y0)
+
 
 def main():
     epd_init(False, True)
@@ -509,16 +596,33 @@ def main():
     print("init e-Ink done")
     epd_read_screen_rotation()
     epd_screen_rotation(DISPLAY_0)
-    epd_set_color(L_GRAY, BLACK) 
-    epd_draw_rect(10,20,100,200, True)
-    epd_draw_rect(50,50,150,250, False)
-    epd_draw_circle(300,300,20, True)
-    epd_draw_circle(105,105,10, False)
-    epd_handshake()
-    epd_draw_line(0,300,300,0)
-    epd_draw_line(0,301,301,0)
-    epd_update()
+    epd_set_color(BLACK, WHITE) 
+#    epd_draw_rect(10,20,100,200, True)
+#    epd_draw_circle(300,300,20, True)
+#    epd_draw_circle(105,105,10, False)
+#    epd_handshake()
+#    epd_draw_line(0,300,300,0)
+#    epd_draw_line(0,301,301,0)
 
+#    epd_draw_rect(395,345,405,355, False)
+
+#    epd_draw_pixel(400,350)
+#    epd_draw_pixel(401,350)
+#    epd_draw_pixel(400,351)
+#    epd_draw_pixel(401,351)
+#    epd_draw_triangle(450,450,500,500,475,400, True)
+    
+#    epd_update()
+    epd_get_color()
+    epd_clear()
+    epd_disp_string("hello", 100,100)
+    epd_set_en_font(ASCII48)
+    epd_disp_string("Hello", 100,200)
+    epd_set_en_font(ASCII64)
+    epd_disp_string("Hello", 100,300)
+    epd_set_memory(MEMORY_MICROSD)
+    epd_disp_bitmap("k1.bmp",300,100)
+    epd_update()
 
     ser.close()
     GPIO.cleanup()
