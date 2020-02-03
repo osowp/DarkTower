@@ -1,6 +1,11 @@
+import logging
+
 import serial
 import RPi.GPIO as GPIO
 from time import sleep
+
+#logging.basicConfig(filename="Epd.log", level=logging.CRITICAL)
+
 
 #Errors with serial port is problem with PI configuration, maybe conflict with bluetooth
 ser = serial.Serial('/dev/serial0', 115200, timeout=1)
@@ -112,7 +117,7 @@ def _fixed_cmd0(_cmd):
     _cmd_buff[8] = _verify(_cmd_buff, 8)
     ser.write(_cmd_buff)
     retVal = ser.readline()
-    print(_cmd, ' - ',retVal)
+    #logging.debug(_cmd, ' - ',retVal)
     return retVal
 
 def _fixed_cmd1(_cmd, _param):
@@ -121,7 +126,7 @@ def _fixed_cmd1(_cmd, _param):
     _cmd_buff[9] = _verify(_cmd_buff, 9)
     ser.write(_cmd_buff)
     retVal = ser.readline()
-    print(_cmd, ' - ', _param,' - ',retVal)
+    #logging.debug(_cmd, ' - ', _param,' - ',retVal)
     return retVal
 
 
@@ -151,7 +156,7 @@ def _fixed_cmd4(_cmd, _param1, _param2, _param3, _param4):
     ser.write(_cmd_buff)
 #    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
     retVal = ser.readline()
-    print(_cmd, ' - ', _param1, ', ', _param2, _param3, ', ', _param4,' - ',retVal)
+    #logging.debug(_cmd, ' - ', _param1, ', ', _param2, _param3, ', ', _param4,' - ',retVal)
     return retVal
 
 #*******************************************************************************
@@ -164,7 +169,7 @@ def _fixed_cmd4(_cmd, _param1, _param2, _param3, _param4):
 #*******************************************************************************/
 
 def epd_wakeup():
-    print("e-Ink Wakeup")
+    logging.debug("e-Ink Wakeup")
     GPIO.output(WAKE_LINE, GPIO.LOW)
     sleep(0.010)
     GPIO.output(WAKE_LINE, GPIO.HIGH)
@@ -194,7 +199,7 @@ def epd_enter_sleep():
 #*******************************************************************************/
 
 def epd_reset():
-    print("e-Ink Reset")
+    logging.debug("e-Ink Reset")
     GPIO.output(RESET_LINE, GPIO.LOW)
     sleep(0.010)
     GPIO.output(RESET_LINE, GPIO.HIGH)
@@ -223,7 +228,7 @@ def epd_handshake():
 #*******************************************************************************/
 def epd_read_baud():
     retVal = _fixed_cmd0(CMD_READ_BAUD)
-    print(retVal)
+    logging.debug(retVal)
     return retVal
 
 #*******************************************************************************
@@ -236,7 +241,7 @@ def epd_read_baud():
 #*******************************************************************************/
 def epd_read_memory():
     retVal = _fixed_cmd0(CMD_READ_MEMORYMODE)
-    print(retVal)
+    logging.debug(retVal)
     return retVal
 
 #*******************************************************************************
@@ -306,7 +311,7 @@ def epd_update():
 #*******************************************************************************/
 def epd_read_screen_rotation():
     retVal = _fixed_cmd0(CMD_READ_SCREEN_ROT)
-    print(retVal)
+    #logging.debug(retVal)
     return retVal
 
     
@@ -351,7 +356,7 @@ def epd_set_color(color, bkcolor):
 	
     ser.write(_cmd_buff)
 #    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+    #logging.debug(ser.readline())
 
 #*******************************************************************************
 #* Function Name  : void epd_get_color(unsigned char font)
@@ -407,7 +412,7 @@ def epd_draw_pixel( x0,  y0):
 	
     ser.write(_cmd_buff)
 #    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+    #logging.debug(ser.readline())
 
 
 #*******************************************************************************
@@ -452,7 +457,7 @@ def epd_clear_rect( x0,  y0,  x1,  y1):
   epd_set_color(WHITE, BLACK )
   epd_draw_rect(x0, y0, x1, y1, true)
   epd_set_color(BLACK, WHITE)
-  print(ser.readline())
+  #logging.debug(ser.readline())
 
 #*******************************************************************************
 #* Function Name  : void epd_draw_circle(int x0, int y0, int r)
@@ -490,7 +495,7 @@ def epd_draw_circle( x0,  y0,  r,  bFill):
     _cmd_buff[14] = _verify(_cmd_buff, 14);
 	
     ser.write(_cmd_buff)
-    print(ser.readline())
+    logging.debug(ser.readline())
 
 def epd_draw_triangle(x0, y0, x1, y1, x2, y2, bFill):
     _cmd_buff = [0]*21
@@ -524,7 +529,7 @@ def epd_draw_triangle(x0, y0, x1, y1, x2, y2, bFill):
 	
     ser.write(_cmd_buff)
 #    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
-    print(ser.readline())
+    logging.debug(ser.readline())
 
 
 def _var_cmd(_cmd, STR,  x0,  y0):
@@ -559,9 +564,9 @@ def _var_cmd(_cmd, STR,  x0,  y0):
     _cmd_buff[buff_size - 2] = FRAME_E3;
     _cmd_buff[buff_size - 1] = _verify(_cmd_buff, buff_size -1);
 	
-    print(''.join('{:02x}'.format(x) for x in _cmd_buff))
+    logging.debug(''.join('{:02x}'.format(x) for x in _cmd_buff))
     ser.write(_cmd_buff)
-    print(ser.readline())
+    logging.debug(ser.readline())
 
 #*******************************************************************************
 #* Function Name  : void epd_disp_string(const void * p, int x0, int y0)
@@ -588,44 +593,3 @@ def epd_disp_string( STR,  x0,  y0):
 def epd_disp_bitmap( FileName,  x0,  y0):
     _var_cmd(CMD_DRAW_BITMAP, FileName,  x0,  y0)
 
-
-def main():
-    epd_init(False, True)
-    epd_read_baud()
-
-    print("init e-Ink done")
-    epd_read_screen_rotation()
-    epd_screen_rotation(DISPLAY_0)
-    epd_set_color(BLACK, WHITE) 
-#    epd_draw_rect(10,20,100,200, True)
-#    epd_draw_circle(300,300,20, True)
-#    epd_draw_circle(105,105,10, False)
-#    epd_handshake()
-#    epd_draw_line(0,300,300,0)
-#    epd_draw_line(0,301,301,0)
-
-#    epd_draw_rect(395,345,405,355, False)
-
-#    epd_draw_pixel(400,350)
-#    epd_draw_pixel(401,350)
-#    epd_draw_pixel(400,351)
-#    epd_draw_pixel(401,351)
-#    epd_draw_triangle(450,450,500,500,475,400, True)
-    
-#    epd_update()
-    epd_get_color()
-    epd_clear()
-    epd_disp_string("hello", 100,100)
-    epd_set_en_font(ASCII48)
-    epd_disp_string("Hello", 100,200)
-    epd_set_en_font(ASCII64)
-    epd_disp_string("Hello", 100,300)
-    epd_set_memory(MEMORY_MICROSD)
-    epd_disp_bitmap("k1.bmp",300,100)
-    epd_update()
-
-    ser.close()
-    GPIO.cleanup()
-                        
-#def _putchars()
-main()
